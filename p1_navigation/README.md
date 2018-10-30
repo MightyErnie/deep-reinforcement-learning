@@ -4,52 +4,32 @@
 
 # Project 1: Navigation
 
-### Introduction
+### Project details
 
-For this project, you will train an agent to navigate (and collect bananas!) in a large, square world.  
+For this project, we will look at the banana gathering task in which an autonomous robot learns to navigate a square environment, collecting yellow bananas, while avoiding blue bananas.  The state consists of a 37-dimensional space that corresponds to the agents velocity and ray-based perception of objects in the agent's field of view.  The agent can choose from four discrete actions: Move forwards, move backwards, turn left, and turn right.  The agent received a reward of +1 every time it collects a yellow banana, and a reward of -1 every time it collects a blue banana.  The task is considered solved when the weights allow the agent to get an average score of at least 13, over 100 consecutive episodes.
 
-![Trained Agent][image1]
+This project's implementation requires no additional dependencies beyond that specified by the project specification (Unity ml agents, openai gym, pytorch, etc).
 
-A reward of +1 is provided for collecting a yellow banana, and a reward of -1 is provided for collecting a blue banana.  Thus, the goal of your agent is to collect as many yellow bananas as possible while avoiding blue bananas.  
+Training the agent requires running codebox 4 of the jupyter notebook (it is self-sufficient and may, in fact, not work if the previous codeblocks are run).  The notebook requires the included dqn_agent.py and model.py python files.
 
-The state space has 37 dimensions and contains the agent's velocity, along with ray-based perception of objects around agent's forward direction.  Given this information, the agent has to learn how to best select actions.  Four discrete actions are available, corresponding to:
-- **`0`** - move forward.
-- **`1`** - move backward.
-- **`2`** - turn left.
-- **`3`** - turn right.
+### Model
 
-The task is episodic, and in order to solve the environment, your agent must get an average score of +13 over 100 consecutive episodes.
+The model consists of 5 fully-connected layers.  All by the last of the layers is run through a ReLU unit for non-linearity.  The first layer takes the state input and produces a hidden layer of 64 nodes, the second layer takes those inputs and produces 256 nodes, the third layer takes those inputs and produces another 256 nodes, the fourth layer takes those inputs and produces 64 nodes, and the final layer takes those inputs and produces 4 nodes corresponding to the four possible actions.
 
-### Getting Started
+### Learning algorithm
 
-1. Download the environment from one of the links below.  You need only select the environment that matches your operating system:
-    - Linux: [click here](https://s3-us-west-1.amazonaws.com/udacity-drlnd/P1/Banana/Banana_Linux.zip)
-    - Mac OSX: [click here](https://s3-us-west-1.amazonaws.com/udacity-drlnd/P1/Banana/Banana.app.zip)
-    - Windows (32-bit): [click here](https://s3-us-west-1.amazonaws.com/udacity-drlnd/P1/Banana/Banana_Windows_x86.zip)
-    - Windows (64-bit): [click here](https://s3-us-west-1.amazonaws.com/udacity-drlnd/P1/Banana/Banana_Windows_x86_64.zip)
-    
-    (_For Windows users_) Check out [this link](https://support.microsoft.com/en-us/help/827218/how-to-determine-whether-a-computer-is-running-a-32-bit-version-or-64) if you need help with determining if your computer is running a 32-bit version or 64-bit version of the Windows operating system.
+To learn the correct parameters for this model, we employed the same general approach as the DQN model.  For a period of up to 2000 episodes, we execute the model, and update its parameters as we evaluate by applying the temporal difference model.  Each episode is limited to a maximum of 1000 steps, though this is rarely hit.
 
-    (_For AWS_) If you'd like to train the agent on AWS (and have not [enabled a virtual screen](https://github.com/Unity-Technologies/ml-agents/blob/master/docs/Training-on-Amazon-Web-Service.md)), then please use [this link](https://s3-us-west-1.amazonaws.com/udacity-drlnd/P1/Banana/Banana_Linux_NoVis.zip) to obtain the environment.
+At each iteration, we use epsilon-greedy action selection with epsilon initially 1.0 and decaying by 0.5% each episode, until it reaches 0.01, at which point it's held stable.  This action is applied and the next state and reward are retrieved.
 
-2. Place the file in the DRLND GitHub repository, in the `p1_navigation/` folder, and unzip (or decompress) the file. 
+In the DQN we compute the difference between the target value of the current state and action to the value estimated by the current set of parameters, and using that squared loss in a gradient descent algorithm.
 
-### Instructions
+The original DQN calculates the target value by taking the most recent reward and adding a discounted (in our case, with gamma 0.99) evaluation of the next_state with it's current optimal action, using a fixed set of parameters (that only update every 4 updates).  We take this one step further and implement the Dual DQN algorithm.  In this case, we select the optimal action using the non-fixed weights in order to decorrelate the weights used for the optimal action selection (for the next state) and the weights used to evaluate the Q value for that state-action pair.  The MSE loss is then sent to an Adam optimizer with a learning rate of 5e-4.
 
-Follow the instructions in `Navigation.ipynb` to get started with training your own agent!  
+Using this model and learning algorithm we were able to get an average reward of over 15 (due to a typo, we aimed for a more aggressive target :)) over episodes 680-780, well below the benchmark implementation.  See below:
 
-### (Optional) Challenge: Learning from Pixels
+![Training Progress](training_progress.png)
 
-After you have successfully completed the project, if you're looking for an additional challenge, you have come to the right place!  In the project, your agent learned from information such as its velocity, along with ray-based perception of objects around its forward direction.  A more challenging task would be to learn directly from pixels!
+### Future work
 
-To solve this harder task, you'll need to download a new Unity environment.  This environment is almost identical to the project environment, where the only difference is that the state is an 84 x 84 RGB image, corresponding to the agent's first-person view.  (**Note**: Udacity students should not submit a project with this new environment.)
-
-You need only select the environment that matches your operating system:
-- Linux: [click here](https://s3-us-west-1.amazonaws.com/udacity-drlnd/P1/Banana/VisualBanana_Linux.zip)
-- Mac OSX: [click here](https://s3-us-west-1.amazonaws.com/udacity-drlnd/P1/Banana/VisualBanana.app.zip)
-- Windows (32-bit): [click here](https://s3-us-west-1.amazonaws.com/udacity-drlnd/P1/Banana/VisualBanana_Windows_x86.zip)
-- Windows (64-bit): [click here](https://s3-us-west-1.amazonaws.com/udacity-drlnd/P1/Banana/VisualBanana_Windows_x86_64.zip)
-
-Then, place the file in the `p1_navigation/` folder in the DRLND GitHub repository, and unzip (or decompress) the file.  Next, open `Navigation_Pixels.ipynb` and follow the instructions to learn how to use the Python API to control the agent.
-
-(_For AWS_) If you'd like to train the agent on AWS, you must follow the instructions to [set up X Server](https://github.com/Unity-Technologies/ml-agents/blob/master/docs/Training-on-Amazon-Web-Service.md), and then download the environment for the **Linux** operating system above.
+As described above, this implementation only used the Dual DQN addition. I would like to try adding prioritized experience reply and Dueling DQN to see further training improvements.  I would also like to try reducing the model complexity to see if a lower-capacity model could attain the required results, at a lower inference cost.  Finally, I would like to try the "From Pixels" implementation to see how quickly one could train an effective model that uses only images to navigate the environment.
