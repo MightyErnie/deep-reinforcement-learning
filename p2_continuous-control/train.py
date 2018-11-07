@@ -25,7 +25,7 @@ states = env_info.vector_observations
 state_size = states.shape[1]
 
 from ddpg_agent import Agent
-agents = [Agent(state_size=state_size, action_size=action_size, random_seed=10 + i) for i in range(num_agents)]
+agent = Agent(num_agents=num_agents, state_size=state_size, action_size=action_size, random_seed=10)
 
 def ddpg(n_episodes=200, max_t=700):
     scores_deque = deque(maxlen=100)
@@ -34,20 +34,20 @@ def ddpg(n_episodes=200, max_t=700):
     for i_episode in range(1, n_episodes+1):
         env_info = env.reset()[brain_name]
         states = env_info.vector_observations
-        for agent in agents:
-            agent.reset()
+        agent.reset()
         score = 0
         for t in range(max_t):
-            for idx, (agent, state) in enumerate(zip(agents, states)):
-                actions[idx] = agent.act(state)
+            # Request new actions for each agent
+            actions = agent.act(states)
             
+            # Step the environment and retrieve the new states, rewards and whether or not the agent is done
             env_info = env.step(actions)[brain_name]
             next_states = env_info.vector_observations
             rewards = env_info.rewards
             dones = env_info.local_done
 
-            for idx, (state, action, reward, next_state, done) in enumerate(zip(states, actions, rewards, next_states, dones)):
-                agents[idx].step(np.copy(state), np.copy(action), np.copy(reward), np.copy(next_state), np.copy(done))
+            #for idx, (state, action, reward, next_state, done) in enumerate(zip(states, actions, rewards, next_states, dones)):
+            #    agents[idx].step(np.copy(state), np.copy(action), np.copy(reward), np.copy(next_state), np.copy(done))
 
             states = next_states
             score += sum(rewards) / len(rewards)

@@ -17,16 +17,12 @@ LR_ACTOR = 1e-4         # learning rate of the actor
 LR_CRITIC = 1e-3        # learning rate of the critic
 WEIGHT_DECAY = 0        # L2 weight decay
 
-#device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-device = torch.device("cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-# Replay memory
-global_replay_memory = None 
-    
 class Agent():
     """Interacts with and learns from the environment."""
     
-    def __init__(self, state_size, action_size, random_seed):
+    def __init__(self, num_agents, state_size, action_size, random_seed):
         """Initialize an Agent object.
         
         Params
@@ -50,22 +46,19 @@ class Agent():
         self.critic_optimizer = optim.Adam(self.critic_local.parameters(), lr=LR_CRITIC, weight_decay=WEIGHT_DECAY)
 
         # Noise process
-        self.noise = OUNoise(action_size, random_seed)
+        self.noise = OUNoise(num_agents, action_size, random_seed)
         
         # Replay memory
-        global global_replay_memory
-        if global_replay_memory is None:
-            global_replay_memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
+        self.memory = ReplayBuffer(action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
 
     def step(self, state, action, reward, next_state, done):
         """Save experience in replay memory, and use random sample from buffer to learn."""
         # Save experience / reward
-        global global_replay_memory
-        global_replay_memory.add(state, action, reward, next_state, done)
+        self.memory.add(state, action, reward, next_state, done)
 
         # Learn, if enough samples are available in memory
-        if len(global_replay_memory) > BATCH_SIZE:
-            experiences = global_replay_memory.sample()
+        if len(self.memory) > BATCH_SIZE:
+            experiences = self.memory.sample()
             self.learn(experiences, GAMMA)
 
     def act(self, state, add_noise=True):
@@ -77,6 +70,7 @@ class Agent():
         self.actor_local.train()
         if add_noise:
             action += self.noise.sample()
+
         return np.clip(action, -1, 1)
 
     def reset(self):
@@ -140,12 +134,12 @@ class Agent():
 class OUNoise:
     """Ornstein-Uhlenbeck process."""
 
-    def __init__(self, size, seed, mu=0., theta=0.15, sigma=0.2):
+    def __init__(self, num_agents, size, seed, mu=0., theta=0.15, sigma=0.2):
         """Initialize parameters and noise process."""
-        self.mu = mu * np.ones(size)
+        self.mu = mu * np.ones((num_agents, size))
         self.theta = theta
         self.sigma = sigma
-        self.seed = random.seed(seed)
+        self.seed = np.random.seed(seed)
         self.reset()
 
     def reset(self):
@@ -155,7 +149,7 @@ class OUNoise:
     def sample(self):
         """Update internal state and return it as a noise sample."""
         x = self.state
-        dx = self.theta * (self.mu - x) + self.sigma * np.array([random.random() for i in range(len(x))])
+        dx = self.theta * (self.mu - x) + self.sigma * np.random.random(self.state.shape)
         self.state = x + dx
         return self.state
 
