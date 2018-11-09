@@ -301,7 +301,7 @@ class PrioritizedReplayBuffer:
         self.rewards = np.zeros(buffer_size, dtype=np.float32)
         self.next_states = np.zeros((buffer_size, state_size), dtype=np.float32)
         self.dones = np.zeros(buffer_size, dtype=np.float32)
-        self.priorities = np.ones(buffer_size, dtype=np.float32)
+        self.priorities = np.ones(buffer_size, dtype=np.float64)
 
         self.batch_size = batch_size
         self.seed = random.seed(seed)
@@ -333,11 +333,11 @@ class PrioritizedReplayBuffer:
 
         sample_indices = np.random.choice(self.used_size, self.batch_size, p=probabilities)
 
-        states = torch.from_numpy(np.vstack([self.states[i] for i in sample_indices])).float().to(device)
-        actions = torch.from_numpy(np.vstack([self.actions[i] for i in sample_indices])).float().to(device)
-        rewards = torch.from_numpy(np.vstack([self.rewards[i] for i in sample_indices])).float().to(device)
-        next_states = torch.from_numpy(np.vstack([self.next_states[i] for i in sample_indices])).float().to(device)
-        dones = torch.from_numpy(np.vstack([self.dones[i] for i in sample_indices]).astype(np.uint8)).float().to(device)
+        states = torch.from_numpy(self.states[sample_indices]).float().to(device)
+        actions = torch.from_numpy(self.actions[sample_indices]).float().to(device)
+        rewards = torch.from_numpy(self.rewards[sample_indices]).float().to(device).unsqueeze(-1)
+        next_states = torch.from_numpy(self.next_states[sample_indices]).float().to(device)
+        dones = torch.from_numpy(self.dones[sample_indices].astype(np.uint8)).float().to(device).unsqueeze(-1)
 
         weights = np.power(self.used_size * probabilities[sample_indices], -beta)
         weights /= weights.max()
