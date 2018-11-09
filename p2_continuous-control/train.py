@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from collections import deque
 import matplotlib.pyplot as plt
-import threading
+import time
 import ddpg_agent
 
 from cProfile import Profile
@@ -60,6 +60,7 @@ def ddpg(n_episodes=2000, max_t=700):
     scores = []
     mean_scores = []
     max_score = -np.Inf
+    start_time = time.time()
     for i_episode in range(1, n_episodes+1):
         env_info = env.reset()[brain_name]
         states = env_info.vector_observations
@@ -92,7 +93,7 @@ def ddpg(n_episodes=2000, max_t=700):
         scores_deque.append(score)
         scores.append(score)
         mean_scores.append(np.mean(scores_deque))
-        print('\rEpisode {}\tAverage Score: {:.2f}\tScore: {:.2f}'.format(i_episode, np.mean(scores_deque), score), end="")
+        print('\rEpisode {}\tAverage Score: {:.2f}\tScore: {:.2f}\tElapsed time: {:.2f}'.format(i_episode, np.mean(scores_deque), score, time.time() - start_time), end="")
         plot_scores(scores, mean_scores)
         if i_episode % 10 == 0:
             torch.save(learner.actor_local.state_dict(), 'checkpoint_actor.pth')
@@ -106,7 +107,7 @@ def ddpg(n_episodes=2000, max_t=700):
     return scores
 
 # Optional profiling step (just a handful of episodes)
-if True:
+if False:
     profiler = Profile()
     profiler.runcall(ddpg, 3, 700)
 
