@@ -19,11 +19,11 @@ LR_CRITIC = 1e-3        # learning rate of the critic
 WEIGHT_DECAY = 0        # L2 weight decay
 
 STARTING_BETA = 0.4
-BETA_STEPS = 10000
+BETA_STEPS = BUFFER_SIZE
 
-REWARD_STEPS = 5
+REWARD_STEPS = 4
 
-ACTOR_UPDATE_STEPS = 5
+ACTOR_UPDATE_STEPS = 3
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
@@ -106,15 +106,15 @@ class Agent():
         Q_targets_next = self.critic_target(next_states, actions_next)
 
         # Compute Q targets for current states (y_i)
-        Q_targets = rewards + (GAMMA * Q_targets_next * (1 - dones))
+        Q_targets = rewards + ((GAMMA ** REWARD_STEPS) * Q_targets_next * (1 - dones))
         Q_expected = self.critic_local(states, actions)
 
         # Compute weighted losses for the prioritized replay
-        loss = (Q_expected - Q_targets) ** 2.0
+        loss = (Q_targets - Q_expected) ** 2.0
         if (weights is not None) and (sample_indices is not None):
             weights = torch.tensor(weights).float().to(device).unsqueeze(-1)
-            weighted_losses = (weights * loss).detach()
-            self.memory.update_priorities(sample_indices, weighted_losses.cpu().data.numpy())
+            weighted_loss = (weights * loss).detach()
+            self.memory.update_priorities(sample_indices, weighted_loss.cpu().data.numpy())
 
         # Compute critic loss
         critic_loss = loss.mean()

@@ -9,7 +9,7 @@ import ddpg_agent
 from cProfile import Profile
 from pstats import Stats
 
-transitions = deque(maxlen=ddpg_agent.REWARD_STEPS)
+temporary_transition_buffer = deque(maxlen=ddpg_agent.REWARD_STEPS)
 
 #env = UnityEnvironment(file_name='./Reacher_Windows_x86_64/Reacher.exe')
 env = UnityEnvironment(file_name='./Reacher_Windows_x86_64_20/Reacher.exe')
@@ -74,9 +74,27 @@ def ddpg(n_episodes=2000, max_t=700):
             # Step the environment and retrieve the new states, rewards and whether or not the agent is done
             next_states, rewards, dones = tick_simulation(actions)
 
+            # Add this transition to the temporary transition buffer
+            temporary_transition_buffer.append((states, actions, np.array(rewards), next_states, np.array(dones)))
+
             # Store all these transitions into the replay buffer
-            for state, action, reward, next_state, done in zip(states, actions, rewards, next_states, dones):
-                learner.store_transitions(np.copy(state), np.copy(action), np.copy(reward), np.copy(next_state), np.copy(done))
+            if len(temporary_transition_buffer) == ddpg_agent.REWARD_STEPS:
+                # Get the initial states, rewards
+                states_, actions_, rewards_, _, dones_ = temporary_transition_buffer[0]
+                rewards_ *= (1 - dones_)
+
+                # Compute the discounted remainder of the reward
+                for step in range(1, ddpg_agent.REWARD_STEPS):
+                    gamma = ddpg_agent.GAMMA ** step
+                    _, _, reward_, _, done_ = temporary_transition_buffer[step]
+                    rewards_ += gamma * reward_ * (1 - done_)
+
+                # Setup the next state info
+                _, _, _, next_states_, dones_ = temporary_transition_buffer[-1]
+
+                # Submit the N-step transition to the replay buffer
+                for state, action, reward, next_state, done in zip(states_, actions_, rewards_, next_states_, dones_):
+                    learner.store_transitions(np.copy(state), np.copy(action), np.copy(reward), np.copy(next_state), np.copy(done))
 
             # Learn from a minibatch of transitions
             tick_learning()
@@ -109,7 +127,7 @@ def ddpg(n_episodes=2000, max_t=700):
 # Optional profiling step (just a handful of episodes)
 if False:
     profiler = Profile()
-    profiler.runcall(ddpg, 3, 700)
+    profiler.runcall(ddpg, 60, 700)
 
     stats = Stats(profiler)
     stats.strip_dirs()
