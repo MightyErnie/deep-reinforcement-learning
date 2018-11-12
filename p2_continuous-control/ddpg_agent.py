@@ -18,6 +18,7 @@ LR_ACTOR = 1e-4         # learning rate of the actor
 LR_CRITIC = 1e-3        # learning rate of the critic
 WEIGHT_DECAY = 0        # L2 weight decay
 
+PER_EPSILON = 1e-5
 STARTING_BETA = 0.4
 BETA_STEPS = BUFFER_SIZE
 
@@ -110,15 +111,15 @@ class Agent():
         Q_expected = self.critic_local(states, actions)
 
         # Compute weighted losses for the prioritized replay
-        loss = (Q_targets - Q_expected) ** 2.0
+        critic_loss = None
         if (weights is not None) and (sample_indices is not None):
             self.memory.update_priorities(sample_indices, torch.abs(Q_targets - Q_expected).detach().cpu().data.numpy())
 
-            weights = weights.unsqueeze(-1)
-            weighted_loss = (weights * loss)
-
-        # Compute critic loss
-        critic_loss = loss.mean()
+            weights = torch.sqrt(weights.unsqueeze(-1))
+            critic_loss = F.mse_loss(weights * Q_targets, weights * Q_expected)
+        else:
+            # Compute critic loss
+            critic_loss = F.mse_loss(Q_targets, Q_expected)
 
         # Minimize the loss
         self.critic_optimizer.zero_grad()
@@ -387,7 +388,7 @@ class PrioritizedReplayBuffer:
         self.used_size = min(self.used_size + 1, self.buffer_size)
 
     def generate_sampling_probabilities(self):
-        probabilities = np.power(self.priorities[:self.used_size], self.alpha)
+        probabilities = np.power(self.priorities[:self.used_size] + PER_EPSILON, self.alpha)
         probabilities /= np.sum(probabilities)
         return probabilities
     
