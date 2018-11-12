@@ -61,7 +61,7 @@ class Agent():
         self.beta_step = (1.0 - STARTING_BETA) / BETA_STEPS
     
         # Replay memory
-        self.memory = PrioritizedReplayBuffer(state_size, action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
+        self.memory = ReplayBuffer(state_size, action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
 
     def store_transitions(self, state, action, reward, next_state, done):
         """Save experience in replay memory, and use random sample from buffer to learn."""
@@ -153,7 +153,15 @@ class Agent():
         for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
             target_param.data.copy_(tau*local_param.data + (1.0-tau)*target_param.data)
 
-    def fully_update_actor(self, agent):
+    def update_targets(self):
+        """Update model parameters.
+        """
+        for target_param, local_param in zip(critic_target.parameters(), critic_local.parameters()):
+            target_param.data.copy_(local_param.data)
+        for target_param, local_param in zip(actor_target.parameters(), actor_local.parameters()):
+            target_param.data.copy_(local_param.data)
+
+    def update_actor_from_learner(self, agent):
         """Copies actor networks from the source
 
         Params
@@ -185,7 +193,7 @@ class OUNoise:
         self.state = x + dx
         return self.state
 
-class ReplayBuffer:
+class ReplayBufferDeque:
     """Fixed-size buffer to store experience tuples."""
 
     def __init__(self, state_size, action_size, buffer_size, batch_size, seed):
@@ -224,6 +232,61 @@ class ReplayBuffer:
     def __len__(self):
         """Return the current size of internal memory."""
         return len(self.memory)
+
+class ReplayBuffer:
+    """Fixed-size buffer to store experience tuples."""
+
+    def __init__(self, state_size, action_size, buffer_size, batch_size, seed):
+        """Initialize a ReplayBuffer object.
+        Params
+        ======
+            buffer_size (int): maximum size of buffer
+            batch_size (int): size of each training batch
+        """
+        self.action_size = action_size
+        self.buffer_size = buffer_size
+        self.used_size = 0
+        self.next_entry = 0
+
+        self.states = np.zeros((buffer_size, state_size), dtype=np.float32)
+        self.actions = np.zeros((buffer_size, action_size), dtype=np.float32)
+        self.rewards = np.zeros(buffer_size, dtype=np.float32)
+        self.next_states = np.zeros((buffer_size, state_size), dtype=np.float32)
+        self.dones = np.zeros(buffer_size, dtype=np.float32)
+
+        self.batch_size = batch_size
+        self.seed = random.seed(seed)
+    
+    def add(self, state, action, reward, next_state, done):
+        """Add a new experience to memory."""
+        # ANIS TODO: Handle adding batches at once
+        self.states[self.next_entry] = state
+        self.actions[self.next_entry] = action
+        self.rewards[self.next_entry] = reward
+        self.next_states[self.next_entry] = next_state
+        self.dones[self.next_entry] = done
+
+        self.next_entry = (self.next_entry + 1) % self.buffer_size
+        self.used_size = min(self.used_size + 1, self.buffer_size)
+    
+    def sample(self, beta):
+        """Randomly sample a batch of experiences from memory."""
+        sample_indices = np.random.choice(self.used_size, self.batch_size)
+
+        states = torch.from_numpy(self.states[sample_indices]).float().to(device)
+        actions = torch.from_numpy(self.actions[sample_indices]).float().to(device)
+        rewards = torch.from_numpy(self.rewards[sample_indices]).float().to(device).unsqueeze(-1)
+        next_states = torch.from_numpy(self.next_states[sample_indices]).float().to(device)
+        dones = torch.from_numpy(self.dones[sample_indices].astype(np.uint8)).float().to(device).unsqueeze(-1)
+
+        return (states, actions, rewards, next_states, dones), None, None
+
+    def update_priorities(self, indices, new_priorities):
+        pass
+
+    def __len__(self):
+        """Return the current size of internal memory."""
+        return self.used_size
 
 
 class PrioritizedReplayBufferDeque:

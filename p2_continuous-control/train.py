@@ -5,6 +5,7 @@ from collections import deque
 import matplotlib.pyplot as plt
 import time
 import ddpg_agent
+import sys
 
 from cProfile import Profile
 from pstats import Stats
@@ -101,7 +102,7 @@ def ddpg(n_episodes=2000, max_t=700):
 
             # Periodically update the actor
             if (t % ddpg_agent.ACTOR_UPDATE_STEPS) == 0:
-                actor.fully_update_actor(learner)
+                actor.update_actor_from_learner(learner)
 
             states = next_states
             score += sum(rewards) / len(rewards)
@@ -125,14 +126,8 @@ def ddpg(n_episodes=2000, max_t=700):
     return scores
 
 # Optional profiling step (just a handful of episodes)
-if False:
-    profiler = Profile()
-    profiler.runcall(ddpg, 60, 700)
-
-    stats = Stats(profiler)
-    stats.strip_dirs()
-    stats.sort_stats('cumulative')
-    stats.print_stats()
+if len(sys.argv) > 1 and lower(sys.argv) == 'profile':
+    ddpg(70, 700)
 
     env.close()
     exit()
