@@ -61,7 +61,7 @@ class Agent():
         self.beta_step = (1.0 - STARTING_BETA) / BETA_STEPS
     
         # Replay memory
-        self.memory = ReplayBuffer(state_size, action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
+        self.memory = PrioritizedReplayBuffer(state_size, action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
 
     def store_transitions(self, state, action, reward, next_state, done):
         """Save experience in replay memory, and use random sample from buffer to learn."""
@@ -112,9 +112,10 @@ class Agent():
         # Compute weighted losses for the prioritized replay
         loss = (Q_targets - Q_expected) ** 2.0
         if (weights is not None) and (sample_indices is not None):
-            weights = torch.tensor(weights).float().to(device).unsqueeze(-1)
-            weighted_loss = (weights * loss).detach()
-            self.memory.update_priorities(sample_indices, weighted_loss.cpu().data.numpy())
+            self.memory.update_priorities(sample_indices, torch.abs(Q_targets - Q_expected).detach().cpu().data.numpy())
+
+            weights = weights.unsqueeze(-1)
+            weighted_loss = (weights * loss)
 
         # Compute critic loss
         critic_loss = loss.mean()
@@ -402,8 +403,9 @@ class PrioritizedReplayBuffer:
         next_states = torch.from_numpy(self.next_states[sample_indices]).float().to(device)
         dones = torch.from_numpy(self.dones[sample_indices].astype(np.uint8)).float().to(device).unsqueeze(-1)
 
-        weights = np.power(self.used_size * probabilities[sample_indices], -beta)
-        weights /= weights.max()
+        weights = torch.from_numpy(self.used_size * probabilities[sample_indices]).float().to(device)
+        weights = torch.pow(weights, -beta)
+        weights /= torch.max(weights)
 
         return (states, actions, rewards, next_states, dones), sample_indices, weights
 
