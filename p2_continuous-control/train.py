@@ -98,10 +98,12 @@ def ddpg(n_episodes=2000, max_t=700):
                     learner.store_transitions(np.copy(state), np.copy(action), np.copy(reward), np.copy(next_state), np.copy(done))
 
             # Learn from a minibatch of transitions
-            tick_learning()
+            if (t % ddpg_agent.LEARN_INTERVAL) == 0:
+                for _ in range(ddpg_agent.LEARN_STEPS):
+                    tick_learning()
 
             # Periodically update the actor
-            if (t % ddpg_agent.ACTOR_UPDATE_STEPS) == 0:
+            if (t % ddpg_agent.ACTOR_UPDATE_INTERVAL) == 0:
                 actor.update_actor_from_learner(learner)
 
             states = next_states
@@ -113,7 +115,7 @@ def ddpg(n_episodes=2000, max_t=700):
         scores.append(score)
         mean_scores.append(np.mean(scores_deque))
         print('\rEpisode {}\tAverage Score: {:.2f}\tScore: {:.2f}\tElapsed time: {:.2f}'.format(i_episode, np.mean(scores_deque), score, time.time() - start_time), end="")
-        plot_scores(scores, mean_scores)
+        #plot_scores(scores, mean_scores)
         if i_episode % 10 == 0:
             torch.save(learner.actor_local.state_dict(), 'checkpoint_actor.pth')
             torch.save(learner.critic_local.state_dict(), 'checkpoint_critic.pth')
