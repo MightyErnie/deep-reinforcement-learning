@@ -10,11 +10,11 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
-BUFFER_SIZE = int(1e6)  # replay buffer size
-BATCH_SIZE = 512        # minibatch size
+BUFFER_SIZE = int(1e5)  # replay buffer size
+BATCH_SIZE = 128        # minibatch size
 GAMMA = 0.99            # discount factor
 TAU = 1e-3              # for soft update of target parameters
-LR_ACTOR = 1e-5         # learning rate of the actor 
+LR_ACTOR = 1e-4         # learning rate of the actor 
 LR_CRITIC = 1e-4        # learning rate of the critic
 WEIGHT_DECAY = 0        # L2 weight decay
 
@@ -26,7 +26,7 @@ REWARD_STEPS = 4
 
 LEARN_STEPS = 1
 LEARN_INTERVAL = 1
-ACTOR_UPDATE_INTERVAL = 3
+ACTOR_UPDATE_INTERVAL = 1
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
@@ -44,6 +44,7 @@ class Agent():
         """
         self.state_size = state_size
         self.action_size = action_size
+        self.num_agents = num_agents
         self.seed = random.seed(random_seed)
 
         # Actor Network (w/ Target Network)
@@ -64,13 +65,12 @@ class Agent():
         self.beta_step = (1.0 - STARTING_BETA) / BETA_STEPS
     
         # Replay memory
-        self.memory = PrioritizedReplayBuffer(state_size, action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
+        self.memory = ReplayBuffer(state_size, action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
 
     def store_transitions(self, state, action, reward, next_state, done):
-        """Save experience in replay memory, and use random sample from buffer to learn."""
-        
         # Save experience / reward
-        self.memory.add(state, action, reward, next_state, done)
+        for agent in range(self.num_agents):
+            self.memory.add(state[agent], action[agent], reward[agent], next_state[agent], done[agent])
 
     def determine_actions(self, state, add_noise=True):
         """Returns actions for given state as per current policy."""
@@ -126,8 +126,6 @@ class Agent():
         # Minimize the loss
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
-
-        torch.nn.utils.clip_grad_norm_(self.critic_local.parameters(), 1)
         self.critic_optimizer.step()
 
         # ---------------------------- update actor ---------------------------- #
@@ -193,11 +191,11 @@ class OUNoise:
     def sample(self):
         """Update internal state and return it as a noise sample."""
         x = self.state
-        dx = self.theta * (self.mu - x) + self.sigma * np.random.random(self.state.shape)
+        dx = self.theta * (self.mu - x) + self.sigma * np.random.normal(size=self.state.shape)
         self.state = x + dx
         return self.state
 
-class ReplayBufferDeque:
+class ReplayBuffer:
     """Fixed-size buffer to store experience tuples."""
 
     def __init__(self, state_size, action_size, buffer_size, batch_size, seed):
@@ -236,62 +234,6 @@ class ReplayBufferDeque:
     def __len__(self):
         """Return the current size of internal memory."""
         return len(self.memory)
-
-class ReplayBuffer:
-    """Fixed-size buffer to store experience tuples."""
-
-    def __init__(self, state_size, action_size, buffer_size, batch_size, seed):
-        """Initialize a ReplayBuffer object.
-        Params
-        ======
-            buffer_size (int): maximum size of buffer
-            batch_size (int): size of each training batch
-        """
-        self.action_size = action_size
-        self.buffer_size = buffer_size
-        self.used_size = 0
-        self.next_entry = 0
-
-        self.states = np.zeros((buffer_size, state_size), dtype=np.float32)
-        self.actions = np.zeros((buffer_size, action_size), dtype=np.float32)
-        self.rewards = np.zeros(buffer_size, dtype=np.float32)
-        self.next_states = np.zeros((buffer_size, state_size), dtype=np.float32)
-        self.dones = np.zeros(buffer_size, dtype=np.float32)
-
-        self.batch_size = batch_size
-        self.seed = random.seed(seed)
-    
-    def add(self, state, action, reward, next_state, done):
-        """Add a new experience to memory."""
-        # ANIS TODO: Handle adding batches at once
-        self.states[self.next_entry] = state
-        self.actions[self.next_entry] = action
-        self.rewards[self.next_entry] = reward
-        self.next_states[self.next_entry] = next_state
-        self.dones[self.next_entry] = done
-
-        self.next_entry = (self.next_entry + 1) % self.buffer_size
-        self.used_size = min(self.used_size + 1, self.buffer_size)
-    
-    def sample(self, beta):
-        """Randomly sample a batch of experiences from memory."""
-        sample_indices = np.random.choice(self.used_size, self.batch_size)
-
-        states = torch.from_numpy(self.states[sample_indices]).float().to(device)
-        actions = torch.from_numpy(self.actions[sample_indices]).float().to(device)
-        rewards = torch.from_numpy(self.rewards[sample_indices]).float().to(device).unsqueeze(-1)
-        next_states = torch.from_numpy(self.next_states[sample_indices]).float().to(device)
-        dones = torch.from_numpy(self.dones[sample_indices].astype(np.uint8)).float().to(device).unsqueeze(-1)
-
-        return (states, actions, rewards, next_states, dones), None, None
-
-    def update_priorities(self, indices, new_priorities):
-        pass
-
-    def __len__(self):
-        """Return the current size of internal memory."""
-        return self.used_size
-
 
 class PrioritizedReplayBufferDeque:
     """Fixed-size buffer to store experience tuples."""
