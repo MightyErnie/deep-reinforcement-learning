@@ -12,8 +12,6 @@ from pstats import Stats
 
 TARGET_SCORE = 30.0
 
-temporary_transition_buffer = deque(maxlen=ddpg_agent.REWARD_STEPS)
-
 env = UnityEnvironment(file_name='./Reacher_Windows_x86_64_20/Reacher.exe')
 
 # get the default brain
@@ -67,26 +65,8 @@ def ddpg(n_episodes=500, max_t=10000):
             # Step the environment and retrieve the new states, rewards and whether or not the agent is done
             next_states, rewards, dones = tick_simulation(actions)
 
-            # Add this transition to the temporary transition buffer
-            temporary_transition_buffer.append((states, actions, np.array(rewards), next_states, np.array(dones)))
-
-             # Store all these transitions into the replay buffer
-            if len(temporary_transition_buffer) == ddpg_agent.REWARD_STEPS:
-                # Get the initial states, rewards
-                states_, actions_, rewards_, _, dones_ = temporary_transition_buffer[0]
-                rewards_ *= (1 - dones_)
-
-                # Compute the discounted remainder of the reward
-                for step in range(1, ddpg_agent.REWARD_STEPS):
-                    gamma = ddpg_agent.GAMMA ** step
-                    _, _, reward_, _, done_ = temporary_transition_buffer[step]
-                    rewards_ += gamma * reward_ * (1 - done_)
-
-                # Setup the next state info
-                _, _, _, next_states_, dones_ = temporary_transition_buffer[-1]
-
-                # Submit the N-step transition to the replay buffer
-                agent.store_transitions(states, actions, rewards, next_states, dones)
+            # Submit the N-step transition to the replay buffer
+            agent.store_transitions(states, actions, rewards, next_states, dones)
 
             # Learn from a minibatch of transitions
             if (t % ddpg_agent.LEARN_INTERVAL) == 0:

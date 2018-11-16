@@ -1,5 +1,4 @@
 import numpy as np
-from numpy_ringbuffer import RingBuffer
 import random
 import copy
 from collections import namedtuple, deque
@@ -28,7 +27,7 @@ LEARN_STEPS = 1
 LEARN_INTERVAL = 1
 ACTOR_UPDATE_INTERVAL = 1
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class Agent():
     """Interacts with and learns from the environment."""
@@ -63,14 +62,35 @@ class Agent():
         # Prioritized replay annealing
         self.beta = STARTING_BETA
         self.beta_step = (1.0 - STARTING_BETA) / BETA_STEPS
+
+        # Transition buffer for the N-lookahead
+        self.transition_buffer = deque(maxlen=REWARD_STEPS)
     
         # Replay memory
         self.memory = ReplayBuffer(state_size, action_size, BUFFER_SIZE, BATCH_SIZE, random_seed)
 
-    def store_transitions(self, state, action, reward, next_state, done):
-        # Save experience / reward
-        for agent in range(self.num_agents):
-            self.memory.add(state[agent], action[agent], reward[agent], next_state[agent], done[agent])
+    def store_transitions(self, states, actions, rewards, next_states, dones):
+        # Add this transition to the temporary transition buffer
+        self.transition_buffer.append((states, actions, np.array(rewards), next_states, np.array(dones)))
+
+         # Store all these transitions into the replay buffer
+        if len(self.transition_buffer) == REWARD_STEPS:
+            # Get the initial states, rewards
+            states_, actions_, rewards_, _, dones_ = self.transition_buffer[0]
+            rewards_ *= (1 - dones_)
+
+            # Compute the discounted remainder of the reward
+            for step in range(1, REWARD_STEPS):
+                gamma = GAMMA ** step
+                _, _, reward_, _, done_ = self.transition_buffer[step]
+                rewards_ += gamma * reward_ * (1 - done_)
+
+            # Setup the next state info
+            _, _, _, next_states_, dones_ = self.transition_buffer[-1]
+
+            # Save experience / reward
+            for agent in range(self.num_agents):
+                self.memory.add(states[agent], actions[agent], rewards[agent], next_states[agent], dones[agent])
 
     def determine_actions(self, state, add_noise=True):
         """Returns actions for given state as per current policy."""
