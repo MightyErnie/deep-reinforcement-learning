@@ -4,6 +4,7 @@ from collections import deque
 import matplotlib.pyplot as plt
 
 import maddpg_agent
+import torch
 
 TARGET_SCORE = 0.5
 
@@ -44,9 +45,10 @@ def plot_scores(scores, mean_scores):
     plt.savefig("score_plot.png", dpi=600)
     plt.close(fig)
 
-def maddpg(n_episodes=500000, max_t=10000):
+def maddpg(n_episodes=2500, max_t=10000):
     agent = maddpg_agent.Agent(num_agents=num_agents, state_size=state_size, action_size=action_size, random_seed=31337)
     
+    best_mean = 0.0
     scores_deque = deque(maxlen=100)
     scores = []
     windowed_mean_scores = []
@@ -67,7 +69,12 @@ def maddpg(n_episodes=500000, max_t=10000):
             agent.store_transitions(states, actions, rewards, next_states, dones)
 
             # Learn from a minibatch of transitions
-            agent.learn()
+            if (t % maddpg_agent.LEARNING_INTERVAL) == 0:
+                for _ in range(maddpg_agent.LEARNING_STEPS):
+                    agent.learn()
+
+            if (t % maddpg_agent.ACTOR_UPDATE_INTERVAL) == 0:
+                agent.update_targets()
             
             states = next_states
             score += rewards
@@ -83,11 +90,15 @@ def maddpg(n_episodes=500000, max_t=10000):
         windowed_mean_scores.append(np.mean(scores_deque))
         if (i_episode % 100) == 0:
             plot_scores(scores, windowed_mean_scores)
-        if (i_episode > 100) and (np.mean(scores_deque) > TARGET_SCORE):
-            torch.save(agent.actor_local.state_dict(), 'checkpoint_actor.pth')
-            torch.save(agent.critic_local.state_dict(), 'checkpoint_critic.pth')
-            print('\rEpisode {}\tAverage Score: {:.2f}'.format(i_episode, np.mean(scores_deque)))
-            return scores
+        mean_recent_scores = np.mean(scores_deque)
+        if (i_episode > 100) and (mean_recent_scores > TARGET_SCORE):
+            if mean_recent_scores > best_mean:
+                best_mean = mean_recent_scores
+                torch.save(agent.actor_local[0].state_dict(), 'checkpoint_actor0.pth')
+                torch.save(agent.critic_local[0].state_dict(), 'checkpoint_critic0.pth')
+                torch.save(agent.actor_local[1].state_dict(), 'checkpoint_actor1.pth')
+                torch.save(agent.critic_local[1].state_dict(), 'checkpoint_critic1.pth')
+                print("New best score of {:.2f}".format(mean_recent_scores))
     return scores
 
 scores = maddpg()

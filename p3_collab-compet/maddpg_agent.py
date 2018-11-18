@@ -21,11 +21,11 @@ PER_EPSILON = 1e-5
 STARTING_BETA = 0.4
 BETA_STEPS = BUFFER_SIZE
 
-REWARD_STEPS = 1
+REWARD_STEPS = 3
 
-LEARN_STEPS = 1
-LEARN_INTERVAL = 1
-ACTOR_UPDATE_INTERVAL = 1
+LEARNING_STEPS = 1
+LEARNING_INTERVAL = 1
+ACTOR_UPDATE_INTERVAL = 10
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
@@ -165,9 +165,9 @@ class Agent():
             actor_loss.backward(retain_graph=agent == 0)
             self.actor_optimizer[agent].step()
 
-            # ----------------------- update target networks ----------------------- #
-            self.soft_update(self.critic_local[agent], self.critic_target[agent], TAU)
-            self.soft_update(self.actor_local[agent], self.actor_target[agent], TAU)                     
+        # ----------------------- update target networks ----------------------- #
+        # self.soft_update(self.critic_local[agent], self.critic_target[agent], TAU)
+        # self.soft_update(self.actor_local[agent], self.actor_target[agent], TAU)                     
 
     def soft_update(self, local_model, target_model, tau):
         """Soft update model parameters.
@@ -185,10 +185,11 @@ class Agent():
     def update_targets(self):
         """Update model parameters.
         """
-        for target_param, local_param in zip(critic_target.parameters(), critic_local.parameters()):
-            target_param.data.copy_(local_param.data)
-        for target_param, local_param in zip(actor_target.parameters(), actor_local.parameters()):
-            target_param.data.copy_(local_param.data)
+        for agent in range(self.num_agents):
+            for target_param, local_param in zip(self.critic_target[agent].parameters(), self.critic_local[agent].parameters()):
+                target_param.data.copy_(local_param.data)
+            for target_param, local_param in zip(self.actor_target[agent].parameters(), self.actor_local[agent].parameters()):
+                target_param.data.copy_(local_param.data)
 
     def update_actor_from_learner(self, agent):
         """Copies actor networks from the source
